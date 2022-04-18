@@ -1,8 +1,9 @@
-import EventEmitter from "events"
-import MuteStream from "mute-stream"
-import { fromEvent } from "rxjs"
-import ansiEscapes from "ansi-escapes"
+import { EventEmitter } from "events"
 import rl from "readline"
+import MuteStream from "mute-stream"
+import ansiEscapes from "ansi-escapes"
+import { fromEvent } from "rxjs"
+
 
 const options = {
   type: 'list',
@@ -31,7 +32,6 @@ function Prompt(option) {
       const list = new List(option)
       list.render()
       list.on("exit", answer => {
-        console.log(answer);
         resolve(answer)
       })
     } catch (error) {
@@ -58,6 +58,7 @@ class List extends EventEmitter {
     this.keypress = fromEvent(this.rl.input, "keypress")
       .forEach(this.onKeyPress)
     this.hasSelected = false
+    this.height = this.choices.length + 1
   }
   onKeyPress = (e) => {
     const key = e[1]
@@ -70,10 +71,7 @@ class List extends EventEmitter {
         break;
       case "return":
         this.hasSelected = true
-        this.render()
-        this.close()
-        this.emit("exit", this.choices[this.selected])
-        return
+        break;
       default:
         break;
     }
@@ -84,22 +82,30 @@ class List extends EventEmitter {
       this.selected = this.choices.length - 1
     }
     this.render()
+    if (this.hasSelected) {
+      this.close()
+      this.emit("exit", this.choices[this.selected])
+    }
   }
   close() {
-
+    this.output.unmute()
+    this.output.write(ansiEscapes.cursorShow)
+    this.rl.output.end()
+    this.rl.pause()
+    this.rl.close()
   }
   getContent() {
     let title = this.message + '(Use arrow keys)\n'
     if (!this.hasSelected) {
       this.choices.forEach((choice, index) => {
         if (index === this.selected) {
-          if (index === this.selected.length - 1) {
+          if (index === this.choices.length - 1) {
             title += '> ' + choice.name
           } else {
             title += '> ' + choice.name + '\n'
           }
         } else {
-          if (index === this.selected.length - 1) {
+          if (index === this.choices.length - 1) {
             title += '  ' + choice.name
           } else {
             title += '  ' + choice.name + '\n'
@@ -107,12 +113,12 @@ class List extends EventEmitter {
         }
       })
     } else {
-
+      title = this.message + ':' + this.choices[this.selected].name + '\n'
     }
-    return title
+    return title + ansiEscapes.cursorHide
   }
   clean() {
-    const emptyLines = ansiEscapes.eraseLines(this.choices.length + 1)
+    const emptyLines = ansiEscapes.eraseLines(this.height)
     this.output.write(emptyLines)
   }
   render() {
